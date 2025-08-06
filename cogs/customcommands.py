@@ -6,7 +6,7 @@ from util import app_is_staff, return_or_truncate, get_all_command_names
 
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, callback, interaction: discord.Interaction):
+    def __init__(self, callback, interaction: discord.Interaction) -> None:
         super().__init__(timeout=60)
         self.callback = callback
         self.original_interaction = interaction
@@ -16,7 +16,7 @@ class ConfirmView(discord.ui.View):
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button,
-    ):
+    ) -> None:
         await self.callback(interaction)
         for item in self.children:
             item.disabled = True
@@ -24,14 +24,14 @@ class ConfirmView(discord.ui.View):
         self.stop()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.send_message("Cancelled.", ephemeral=True)
         for item in self.children:
             item.disabled = True
         await self.original_interaction.edit_original_response(view=self)
         self.stop()
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         for item in self.children:
             item.disabled = True
         await self.original_interaction.edit_original_response(view=self)

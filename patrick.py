@@ -30,10 +30,10 @@ class PatrickHelp(commands.HelpCommand):
     It is a base feature of the discord.py library.
     """
 
-    def __init__(self):
+    def __init__(self) -> None: #Import Self for these??
         super().__init__()
 
-    async def get_commands_mapping(self) -> tuple:
+    async def get_commands_mapping(self) -> tuple[dict[..., tuple[..., str]], ...]:
         """Retrieves a tuple of dictionaries containing the commands and custom commands.
 
         Returns:
@@ -52,7 +52,7 @@ class PatrickHelp(commands.HelpCommand):
         return commands_, custom_commands
 
     def format_table(
-        self, commands_mapping: dict, custom_commands_mapping: dict
+        self, commands_mapping: dict[], custom_commands_mapping: dict[]
     ) -> str:
         """Formats a table of commands and custom commands into a string.
 
@@ -132,7 +132,7 @@ class PatrickHelp(commands.HelpCommand):
             f"Available commands: {', '.join(list(command_names)[:7])} ...\nSnipped: <{link}>"
         )
 
-    async def send_bot_help(self, mapping) -> None:
+    async def send_bot_help(self, mapping: ...) -> None: #TODO see docstring
         """This function is called when the help command is invoked without any arguments.
 
         Args:
@@ -143,7 +143,7 @@ class PatrickHelp(commands.HelpCommand):
             return await user.send("I am not yet able to send DMs to minecraft.")
         await self.send_help_message(user)
 
-    async def send_command_help(self, command) -> None:
+    async def send_command_help(self, command: commands.Command) -> None:
         """This function is called when the help command is invoked with a command as an argument.
 
         Args:
@@ -167,9 +167,9 @@ class PatrickHelp(commands.HelpCommand):
 class Patrick(commands.Bot):
     """The main class for the bot. It inherits from commands.Bot and is used to handle the bot's events and commands."""
 
-    def __init__(self, logger_: logging.Logger, config_: dict):
-        self.logger = logger_
-        self.config = config_
+    def __init__(self, logger: logging.Logger, config: dict) -> None:
+        self.logger = logger
+        self.config = config
         self.database = database.Connector()
         self.relay_regex = re.compile(
             self.config.get(
@@ -177,7 +177,7 @@ class Patrick(commands.Bot):
                 r"^`[A-Za-z]+` \*\*([A-Za-z0-9_\\]+)\*\*: *(.*)$",  # Load a default regex if not found in config as a fallback.
             )
         )
-        activity = discord.Game("with Python")  # No more kotlin :)
+        activity = discord.Game("with Python")  # No more kotlin :) !! Very good ;) !!
 
         intents = discord.Intents.default()
         intents.message_content = True
@@ -194,7 +194,7 @@ class Patrick(commands.Bot):
             help_command=PatrickHelp(),  # Registering the custom help command.
         )
 
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         """This function is called by discord.py when the bot is fully logged in and ready to use.
         It connects to the database and loads the extensions.
         """

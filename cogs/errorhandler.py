@@ -10,7 +10,7 @@ class ErrorHandler(commands.Cog):
         self.bot = bot  # This is the bot instance, it lets us interact with most things
 
     @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
+    async def on_command_error(self, ctx, error) -> None:
 
         async def respond(message):
             await reply(ctx, f"{message}")

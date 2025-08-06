@@ -85,7 +85,7 @@ class ShortTime:
         self.dt = now + relativedelta(**data)
 
     @classmethod
-    async def convert(cls: type, ctx: Context, argument: str) -> Self: # Sadly I have no conformation if `cls` is of type `type`, but we can assume that, as it follows naming convention.
+    async def convert(cls: type[ShortTime], ctx: Context, argument: str) -> ShortTime:
         return cls(argument, now=ctx.message.created_at)
 
 
@@ -106,7 +106,7 @@ class HumanTime:
         self._past: bool = dt < now
 
     @classmethod
-    async def convert(cls: type, ctx: Context, argument: str) -> Self:
+    async def convert(cls: type[HumanTime], ctx: Context, argument: str) -> HumanTime:
         return cls(argument, now=ctx.message.created_at)
 
 

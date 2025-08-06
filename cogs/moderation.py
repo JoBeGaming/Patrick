@@ -7,7 +7,7 @@ from util import is_staff, app_is_staff, create_deletion_embed
 from timeutil import UserFriendlyTime
 
 class Moderation(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.check_tempbans.start()
         # Discord.py doesn't support using the @app_commands.context_menu decorator in Cogs.
@@ -20,7 +20,7 @@ class Moderation(commands.Cog):
         self.bot.tree.add_command(ctx_menu)
 
     @tasks.loop(seconds=60)
-    async def check_tempbans(self):
+    async def check_tempbans(self) -> None:
         tempbans = await self.bot.database.pop_expired_tempbans()
         if not tempbans:
             return
@@ -100,5 +100,5 @@ class Moderation(commands.Cog):
 
         await channel.send(embed=embed)
 
-async def setup(bot):
+async def setup(bot) -> None:
     await bot.add_cog(Moderation(bot))

@@ -12,7 +12,7 @@ class NoRelayException(Exception):
 
 
 class RelayMember(discord.Member):
-    __slots__: typing.Tuple[str, ...] = tuple()
+    __slots__: tuple[str, ...] = tuple()
 
     """A subclass of discord.Member to signify that the member is a relay member.
     The class holds no functionality, but is used to signify that the member is a relay member for permission checks.
@@ -96,7 +96,7 @@ def load_automod_regexes(bot: commands.Bot) -> None:
     bot.automod_regexes = [re.compile(regex) for regex in bot.config["automod_regexes"]]
 
 
-def find_automod_matches(bot: commands.Bot, message: discord.Message) -> typing.List[str]:
+def find_automod_matches(bot: commands.Bot, message: discord.Message) -> list[str]:
     """Checks a message against the automod regexes to see if it matches any of them.
 
     Args:
@@ -212,7 +212,7 @@ def is_discord_member():
     return commands.check(predicate)
 
 
-def split_list(lst: typing.List[object], n: int) -> typing.List[typing.List[object]]:
+def split_list(lst: list[object], n: int) -> list[list[object]]:
     """Split a list in n parts. The last part may be shorter than the others.
 
     Args:
@@ -260,7 +260,7 @@ async def create_deletion_embed(
         staff: typing.Union[discord.Member, discord.User],
         reason: str,
         message: discord.Message,
-) -> typing.Tuple[discord.Embed, typing.List[discord.File]]:
+) -> tuple[discord.Embed, list[discord.File]]:
     """Creates an embed for a deletion action.
 
     Args:
@@ -314,7 +314,7 @@ async def create_automod_embed(
         embed.add_field(name="Matches", value=f"`{match}`", inline=False)
     return embed
 
-def get_all_command_names(bot: commands.Bot) -> typing.List[str]:
+def get_all_command_names(bot: commands.Bot) -> list[str]:
     """Get all commands registered in the bot.
 
     Args:
@@ -334,7 +334,7 @@ def get_all_command_names(bot: commands.Bot) -> typing.List[str]:
             command_names.extend([alias for alias in command.aliases])
     return command_names
 
-async def reply(ctx, message=None, is_reply=False, **kwargs: typing.Dict[object, object]) -> object: # I suppose kwargs is a dict[str, Any]; im not sure though
+async def reply(ctx: ..., message=None, is_reply=False, **kwargs: dict[object, object]) -> object: # I suppose kwargs is a dict[str, Any]; im not sure though
     if message is None:
         message = ""
     if is_reply:

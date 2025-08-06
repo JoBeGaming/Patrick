@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Never, Optional
 
 import discord
 from discord.ext import commands
@@ -6,7 +7,7 @@ from discord.ext import commands
 from util import is_discord_member, reply
 
 
-def pretty_timedelta(delta):
+def pretty_timedelta(delta: timedelta) -> str:
     """Convert a timedelta to a human-readable string."""
     days, seconds = delta.days, delta.seconds
     hours, seconds = divmod(seconds, 3600)
@@ -24,7 +25,7 @@ class Timers(commands.Cog):
 
     @commands.group(name="timer", invoke_without_command=True)
     @is_discord_member()
-    async def timer(self, ctx):
+    async def timer(self, ctx) -> Never:
         """Timer commands"""
         raise commands.CommandNotFound(
             "Invalid subcommand. Use `,timer start`, `,timer stop`, or `,timer list`."
@@ -32,16 +33,16 @@ class Timers(commands.Cog):
 
     @timer.command(name="start")
     @is_discord_member()
-    async def start_timer(self, ctx, *, name: str):
+    async def start_timer(self, ctx, *, name: str) -> None:
         await self.bot.database.start_timer(ctx.author.id, name)
         await reply(ctx, f"Timer '{name}' started.")
 
     @timer.command(name="stop")
     @is_discord_member()
-    async def stop_timer(self, ctx, *, name: str):
+    async def stop_timer(self, ctx, *, name: str) -> None:
         rows = await self.bot.database.stop_timer(ctx.author.id, name)
         if rows:
-            row = rows[0]
+            row = rows[0] # Should be timedelta object
             await reply(ctx,
                 f"Timer '{name}' stopped. Took {pretty_timedelta(datetime.now(timezone.utc) - row[0])}"
             )
@@ -50,7 +51,7 @@ class Timers(commands.Cog):
 
     @timer.command(name="list")
     @is_discord_member()
-    async def list_timers(self, ctx, member: discord.Member = None):
+    async def list_timers(self, ctx, member: Optional[discord.Member] = None) -> None:
         if member is None:
             member = ctx.author
         rows = await self.bot.database.get_timers(member.id)
@@ -66,5 +67,5 @@ class Timers(commands.Cog):
             await reply(ctx, "No timers found.")
 
 
-async def setup(bot):
+async def setup(bot: discord.ext.commands.Bot) -> None:
     await bot.add_cog(Timers(bot))
