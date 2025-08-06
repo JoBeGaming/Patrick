@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import datetime
 import discord
-from typing import TYPE_CHECKING, Any, Optional, Union, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Union, Sequence, Tuple
 import parsedatetime as pdt
 from dateutil.relativedelta import relativedelta
 from discord.ext import commands
@@ -40,10 +40,10 @@ def human_join(seq: Sequence[str], delim: str = ", ", final: str = "or") -> str:
 class plural:
     """https://github.com/Rapptz/RoboDanny/blob/bf7d4226350dff26df4981dd53134eeb2aceeb87/cogs/utils/formats.py#L8-L18"""
 
-    def __init__(self, value: int):
+    def __init__(self: Self, value: int) -> None:
         self.value: int = value
 
-    def __format__(self, format_spec: str) -> str:
+    def __format__(self: Self, format_spec: str) -> str:
         v = self.value
         singular, sep, plural = format_spec.partition("|")
         plural = plural or f"{singular}s"
@@ -70,7 +70,7 @@ class ShortTime:
 
     dt: datetime.datetime
 
-    def __init__(self, argument: str, *, now: Optional[datetime.datetime] = None):
+    def __init__(self: Self, argument: str, *, now: Optional[datetime.datetime] = None) -> None:
         match = self.compiled.fullmatch(argument)
         if match is None or not match.group(0):
             match = self.discord_fmt.fullmatch(argument)
@@ -85,14 +85,14 @@ class ShortTime:
         self.dt = now + relativedelta(**data)
 
     @classmethod
-    async def convert(cls, ctx: Context, argument: str) -> Self:
+    async def convert(cls: type, ctx: Context, argument: str) -> Self: # Sadly I have no conformation if `cls` is of type `type`, but we can assume that, as it follows naming convention.
         return cls(argument, now=ctx.message.created_at)
 
 
 class HumanTime:
     calendar = pdt.Calendar(version=pdt.VERSION_CONTEXT_STYLE)
 
-    def __init__(self, argument: str, *, now: Optional[datetime.datetime] = None):
+    def __init__(self: Self, argument: str, *, now: Optional[datetime.datetime] = None) -> None:
         now = now or datetime.datetime.now(tz=datetime.timezone.utc)
         dt, status = self.calendar.parseDT(argument, sourceTime=now)
         if not status.hasDateOrTime:
@@ -106,12 +106,12 @@ class HumanTime:
         self._past: bool = dt < now
 
     @classmethod
-    async def convert(cls, ctx: Context, argument: str) -> Self:
+    async def convert(cls: type, ctx: Context, argument: str) -> Self:
         return cls(argument, now=ctx.message.created_at)
 
 
 class Time(HumanTime):
-    def __init__(self, argument: str, *, now: Optional[datetime.datetime] = None):
+    def __init__(self: Self, argument: str, *, now: Optional[datetime.datetime] = None) -> None:
         try:
             o = ShortTime(argument, now=now)
         except Exception:
@@ -122,7 +122,7 @@ class Time(HumanTime):
 
 
 class FutureTime(Time):
-    def __init__(self, argument: str, *, now: Optional[datetime.datetime] = None):
+    def __init__(self: Self, argument: str, *, now: Optional[datetime.datetime] = None) -> None:
         super().__init__(argument, now=now)
 
         if self._past:
@@ -134,7 +134,8 @@ class BadTimeTransform(app_commands.AppCommandError):
 
 
 class TimeTransformer(app_commands.Transformer):
-    async def transform(self, interaction, value: str) -> datetime.datetime:
+    # What type is interaction?
+    async def transform(self: Self, interaction, value: str) -> datetime.datetime:
         now = interaction.created_at
         try:
             short = ShortTime(value, now=now)
@@ -155,9 +156,9 @@ class FriendlyTimeResult:
     now: datetime.datetime
     arg: str
 
-    __slots__ = ("dt", "arg", "now")
+    __slots__: typing.Tuple[str, str, str] = ("dt", "arg", "now")
 
-    def __init__(self, dt: datetime.datetime, now: datetime.datetime = None):
+    def __init__(self: Self, dt: datetime.datetime, now: datetime.datetime = None) -> None:
         self.dt = dt
         self.now = now
 
@@ -169,7 +170,7 @@ class FriendlyTimeResult:
         self.arg = ""
 
     async def ensure_constraints(
-        self, ctx: Context, uft: UserFriendlyTime, now: datetime.datetime, remaining: str
+        self: Self, ctx: Context, uft: UserFriendlyTime, now: datetime.datetime, remaining: str
     ) -> None:
         if self.dt < now:
             raise commands.BadArgument("This time is in the past.")
@@ -190,11 +191,11 @@ class UserFriendlyTime(commands.Converter):
     """That way quotes aren't absolutely necessary."""
 
     def __init__(
-        self,
+        self: Self,
         converter: Optional[Union[type[commands.Converter], commands.Converter]] = None,
         *,
         default: Any = None,
-    ):
+    ) -> None:
         if isinstance(converter, type) and issubclass(converter, commands.Converter):
             converter = converter()
 
