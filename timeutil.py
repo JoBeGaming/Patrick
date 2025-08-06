@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import datetime
 import discord
-from typing import TYPE_CHECKING, Any, Optional, Union, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Union, Sequence
 import parsedatetime as pdt
 from dateutil.relativedelta import relativedelta
 from discord.ext import commands
@@ -156,7 +156,7 @@ class FriendlyTimeResult:
     now: datetime.datetime
     arg: str
 
-    __slots__: typing.Tuple[str, str, str] = ("dt", "arg", "now")
+    __slots__: tuple[str, str, str] = ("dt", "arg", "now")
 
     def __init__(self: Self, dt: datetime.datetime, now: datetime.datetime = None) -> None:
         self.dt = dt
@@ -205,7 +205,7 @@ class UserFriendlyTime(commands.Converter):
         self.converter: commands.Converter = converter  # type: ignore  # It doesn't understand this narrowing
         self.default: Any = default
 
-    async def convert(self, ctx: Context, argument: str, *, now=None) -> FriendlyTimeResult:
+    async def convert(self: Self, ctx: Context, argument: str, *, now=None) -> FriendlyTimeResult:
         calendar = HumanTime.calendar
         regex = ShortTime.compiled
         if now is None:
