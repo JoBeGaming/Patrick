@@ -12,13 +12,14 @@ class NoRelayException(Exception):
 
 
 class RelayMember(discord.Member):
-    __slots__ = tuple()
+    __slots__: typing.Tuple[str, ...] = tuple()
+
     """A subclass of discord.Member to signify that the member is a relay member.
     The class holds no functionality, but is used to signify that the member is a relay member for permission checks.
     """
 
 
-def return_or_truncate(text, max_length):
+def return_or_truncate(text: str, max_length: int) -> str:
     """Takes a string and truncates it to a maximum length, adding ellipsis if truncated.
     If the string is shorter than the maximum length, it returns the original string.
 
@@ -34,7 +35,7 @@ def return_or_truncate(text, max_length):
     return text[: max_length - 3] + "..."
 
 
-def reformat_relay_chat(bot, message) -> discord.Message:
+def reformat_relay_chat(bot: commmands.Bot, message: discord.Message) -> discord.Message:
     """Takes a discord message and checks if it's a server relay message.
     If it is, it reformats the message to be processed as a command by the bot.
     It also changes the author of the message to a RelayMember object.
@@ -58,7 +59,7 @@ def reformat_relay_chat(bot, message) -> discord.Message:
     return None
 
 
-async def process_custom_command(bot, message) -> bool:
+async def process_custom_command(bot: commands.Bot, message: discord.Message) -> bool:
     """Take a message and check if it is a custom command. If it is, send a random response from the list of responses.
     If the command is not found, return False.
 
@@ -85,7 +86,7 @@ async def process_custom_command(bot, message) -> bool:
     return False
 
 
-def load_automod_regexes(bot):
+def load_automod_regexes(bot: commands.Bot) -> None:
     """A setup function that loads the automod regexes from the config file.
     This runs a re.compile on each regex to create a compiled regex object for performance.
 
@@ -95,7 +96,7 @@ def load_automod_regexes(bot):
     bot.automod_regexes = [re.compile(regex) for regex in bot.config["automod_regexes"]]
 
 
-def find_automod_matches(bot, message: discord.Message) -> list[str]:
+def find_automod_matches(bot: commands.Bot, message: discord.Message) -> typing.List[str]:
     """Checks a message against the automod regexes to see if it matches any of them.
 
     Args:
@@ -115,7 +116,7 @@ def is_staff():
     If they don't, it raises a MissingPermissions error.
     """
 
-    def predicate(ctx):
+    def predicate(ctx) -> bool:
         if (
             not isinstance(ctx.author, discord.User)
             and not isinstance(ctx.author, RelayMember)
@@ -135,7 +136,7 @@ def app_is_staff():
     If they don't, it sends a message to the user saying they are not staff and returns False.
     """
 
-    async def predicate(interaction: discord.Interaction):
+    async def predicate(interaction: discord.Interaction) -> bool:
         if (
             not isinstance(interaction.user, discord.User)
             and discord.utils.get(
@@ -160,7 +161,7 @@ def is_admin():
     If they don't, it raises a MissingPermissions error.
     """
 
-    def predicate(ctx):
+    def predicate(ctx) -> bool:
         if (
             not isinstance(ctx.author, discord.User)
             and not isinstance(ctx.author, RelayMember)
@@ -180,7 +181,7 @@ def app_is_admin():
     If they don't, it sends a message to the user saying they are not staff and returns False.
     """
 
-    async def predicate(interaction: discord.Interaction):
+    async def predicate(interaction: discord.Interaction) -> bool:
         if (
             discord.utils.get(
                 interaction.user.roles, id=interaction.client.config["roles"]["admin"]
@@ -202,7 +203,7 @@ def is_discord_member():
     This allows you to stop certain commands from being run by relay members.
     """
 
-    def predicate(ctx):
+    def predicate(ctx) -> bool:
         if not isinstance(ctx.author, RelayMember):
             return True
         else:
@@ -211,7 +212,7 @@ def is_discord_member():
     return commands.check(predicate)
 
 
-def split_list(a, n):
+def split_list(lst: typing.List[object], n: int) -> typing.List[typing.List[object]]:
     """Split a list in n parts. The last part may be shorter than the others.
 
     Args:
@@ -221,8 +222,8 @@ def split_list(a, n):
     Returns:
         list[list]: A list of n lists with the elements of the original list
     """
-    k, m = divmod(len(a), n)
-    return list(a[i * k + min(i, m) : (i + 1) * k + min(i + 1, m)] for i in range(n))
+    k, m = divmod(len(lst), n)
+    return list(lst[i * k + min(i, m) : (i + 1) * k + min(i + 1, m)] for i in range(n))
 
 def baseconvert(number: str, base_from: int, base_to: int) -> str:
     """Convert a number from one base to another.
@@ -333,7 +334,7 @@ def get_all_command_names(bot: commands.Bot) -> typing.List[str]:
             command_names.extend([alias for alias in command.aliases])
     return command_names
 
-async def reply(ctx, message=None, is_reply=False, **kwargs):
+async def reply(ctx, message=None, is_reply=False, **kwargs: typing.Dict[object, object]) -> object: # I suppose kwargs is a dict[str, Any]; im not sure though
     if message is None:
         message = ""
     if is_reply:
