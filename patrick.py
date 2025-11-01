@@ -141,7 +141,7 @@ class PatrickHelp(commands.HelpCommand):
         """
         user = self.context.author
         if isinstance(user, RelayMember):
-            return await self.get_destination().send("I am not yet able to send DMs to minecraft.")
+            user = ...
         await self.send_help_message(user)
 
     async def send_command_help(self, command) -> None:
@@ -152,7 +152,7 @@ class PatrickHelp(commands.HelpCommand):
         """
         user = self.context.author
         if isinstance(user, RelayMember):
-            return await self.get_destination().send("I am not yet able to send DMs to minecraft.")
+            user = ...
         if len(command.signature) == 0:
             await user.send(
                 f"Usage: `{self.context.bot.command_prefix[1]}{command.name}`"
