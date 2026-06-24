@@ -313,7 +313,7 @@ class RandCommands(commands.Cog):
             f"Fractal generation took {end - start:.2f} seconds for seed '{seed}'"
         )
 
-    @commands.command(help="Generate a spirograph image using a given seed.")
+    @commands.command(help="Generate a spirograph image using a given seed.", aliases=["sp", "sg", "graph",])
     async def spirograph(self, ctx, seed: str):
         start = perf_counter()
         width = self.bot.config["spirographDeets"]["width"]
