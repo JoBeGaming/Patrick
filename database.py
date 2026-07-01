@@ -280,3 +280,21 @@ class Connector:
             rows = await cur.fetchall()
             await self.connection.commit()
             return rows
+
+    async def get_ban_status(self, user_id: int) -> collections.abc.Iterable[aiosqlite.Row]:
+        """
+        Get a list of status information for all bans involving the given user (yes there can be multiple ones?!).
+
+        Args:
+            user_id (int): The ID of the user to check
+
+        Returns:
+            Iterable: An iterable of all entries in the database matching the user_id.
+        """
+
+        async with self.connection.cursor() as cur:
+            query = "SELECT reason, timestamp FROM tempbans WHERE user_id = ? AND timestamp < ?"
+            await cur.execute(query, (user_id, datetime.now(timezone.utc)))
+            rows = await cur.fetchall()
+            await self.connection.commit()
+            return rows

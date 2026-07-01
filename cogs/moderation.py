@@ -4,10 +4,15 @@ from discord.ext import commands, tasks
 import typing
 
 from util import is_staff, app_is_staff, create_deletion_embed, reformat_relay_chat
-from timeutil import UserFriendlyTime
+from timeutil import UserFriendlyTime, human_timedelta
+
+
+if typing.TYPE_CHECKING:
+    import patrick
+
 
 class Moderation(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: patrick.Patrick) -> None:
         self.bot = bot
         self.check_tempbans.start()
         # Discord.py doesn't support using the @app_commands.context_menu decorator in Cogs.
@@ -24,9 +29,11 @@ class Moderation(commands.Cog):
         tempbans = await self.bot.database.pop_expired_tempbans()
         if not tempbans:
             return
+
         channel = self.bot.get_channel(self.bot.config["channels"]["audit_log"])
         for user_id, in tempbans:
             user = self.bot.get_user(user_id) or await self.bot.fetch_user(user_id)
+
             if user:
                 try:
                     await self.bot.guild.unban(user, reason=f"Temporary ban expired")
@@ -50,12 +57,12 @@ class Moderation(commands.Cog):
             required=True,
         )
 
-        def __init__(self, message: discord.Message, bot):
+        def __init__(self, message: discord.Message, bot: patrick.Patrick) -> None:
             super().__init__()
             self.original_message = message
             self.bot = bot
 
-        async def on_submit(self, interaction: discord.Interaction):
+        async def on_submit(self, interaction: discord.Interaction) -> None:
             reason = str(self.reason).strip()
             if reason == "":
                 reason = "No reason provided"
@@ -103,5 +110,17 @@ class Moderation(commands.Cog):
 
         await channel.send(embed=embed)
 
-async def setup(bot):
+    @commands.command(name="isbanned", aliases=["banned", "bantime", "banstatus"])
+    async def isbanned(self, ctx: commands.Context[patrick.Patrick], user: discord.Member | discord.User) -> None:
+        status = list(await self.bot.database.get_ban_status(user.id))
+
+        if status:
+            message = f"User {user.name} has been banned until {status[0]["timestamp"]} ({human_timedelta(status[0]["timestamp"])}) for {status[0]["reason"]}."
+
+        else:
+            message = f"User {user.name} is not banned (anymore)."
+
+        await ctx.reply(message)
+
+async def setup(bot: patrick.Patrick) -> None:
     await bot.add_cog(Moderation(bot))
