@@ -62,38 +62,24 @@ class PatrickHelp(commands.HelpCommand):
             custom_commands_mapping (dict): The dictionary containing the custom commands and their messages.
 
         Returns:
-            str: A formatted string containing the commands and custom commands in a table format.
+            str: A formatted string containing the commands and custom commands in a markdown table in a compact layout.
         """
-        maxlen_key = max(
-            [len(key) for key in commands_mapping.keys()] + [len("Command:")]
-        )
-        maxlen_value = max(
-            [len(value[0]) for value in commands_mapping.values()] + [len("Signature:")]
-        )
-        maxlen_description = max(len(value[1]) for value in commands_mapping.values())
 
-        text = "Available commands:\n"
-        text += f"|-{''.ljust(maxlen_key, '-')}-|-{''.ljust(maxlen_value, '-')}-|-{''.ljust(maxlen_description, '-')}-|\n"
-        text += f"| {'Command:'.ljust(maxlen_key)} | {'Signature:'.ljust(maxlen_value)} | {'Description:'.ljust(maxlen_description)} |\n"
-        text += f"|-{''.ljust(maxlen_key, '-')}-|-{''.ljust(maxlen_value, '-')}-|-{''.ljust(maxlen_description, '-')}-|\n"
+        text = "# Patrick Commands\n\n## Available commands\n\nHardcoded commands with special responses:\n\n| Command | Signature | Description | Example |\n| --- | --- | --- | --- |\n"
         text += "\n".join(
-            f"| {key.ljust(maxlen_key)} | {value[0].ljust(maxlen_value)} | {value[1].ljust(maxlen_description)} |"
+            f"| {key} | `{value[0]}` | {value[1]} | ... |"
             for key, value in commands_mapping.items()
         )
-        text += f"\n|-{''.ljust(maxlen_key, '-')}-|-{''.ljust(maxlen_value, '-')}-|-{''.ljust(maxlen_description, '-')}-|"
-
+  
         if len(custom_commands_mapping) == 0:
             return text
 
-        custom_commands_split = split_list(list(custom_commands_mapping.keys()), 3)
-        maxlens = [max((len(key) for key in column), default=5) for column in custom_commands_split]
-
-        text += "\n\nCustom commands:\n"
-        text += f"|-{''.ljust(maxlens[0], '-')}-|-{''.ljust(maxlens[1], '-')}-|-{''.ljust(maxlens[2], '-')}-|\n"
-        for i in range(len(custom_commands_split[0])):
-            text += f"| {custom_commands_split[0][i].ljust(maxlens[0])} | {custom_commands_split[1][i].ljust(maxlens[1]) if  0 <= i < len(custom_commands_split[1]) else ''.ljust(maxlens[1])} | {custom_commands_split[2][i].ljust(maxlens[2]) if 0 <= i < len(custom_commands_split[2]) else ''.ljust(maxlens[2])} |\n"
-        text += f"|-{''.ljust(maxlens[0], '-')}-|-{''.ljust(maxlens[1], '-')}-|-{''.ljust(maxlens[2], '-')}-|\n"
-        return text
+        text += "\n\n## Custom commands:\n\n| Command | Response(s) |\n| --- | --- |\n"
+  
+        for key, value in custom_commands_mapping.items():
+            text += f"| {key} | {value} |\n"
+  
+        return text + "\n"
 
     async def generate_link(self, content: str) -> str:
         """Uploads the content to dpaste.com and returns the link.
@@ -133,6 +119,7 @@ class PatrickHelp(commands.HelpCommand):
             f"Available commands: {', '.join(list(command_names)[:7])} ...\nSnipped: <{link}>"
         )
 
+    # cache, invalidate cache on ,add or ,remove?!
     async def send_bot_help(self, mapping) -> None:
         """This function is called when the help command is invoked without any arguments.
 
