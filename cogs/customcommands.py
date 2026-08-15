@@ -84,6 +84,26 @@ class CustomCommands(commands.Cog):
             f"Response added to command `{key}`.", ephemeral=True
         )
 
+    @app_commands.command(
+        name="addresponses",
+        description="Add responses to an already existing command."
+    )
+    @app_is_staff()
+    async def add_responses(self, interaction, key: str, *, message: str):
+        if key not in self.bot.database.commands_cache:
+            await interaction.response.send_message(
+                f"Command `{key}` does not exist.", ephemeral=True
+            )
+            return
+        stripped = message.removeprefix("```").removesuffix("```")
+        messages = stripped.splitlines()
+        for message in messages:
+            await self.bot.database.add_command_response(key, message)
+
+        await interaction.response.send_message(
+            f"{len(messages) responses added to command `{key}`.", ephemeral=True
+        )
+    
     @add_response.autocomplete("key")
     async def autocomplete_key(self, interaction, current: str):
         commands_ = self.bot.database.commands_cache
