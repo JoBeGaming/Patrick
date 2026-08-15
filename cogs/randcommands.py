@@ -1,12 +1,15 @@
 import asyncio
+import discord
 import random
+import re
+
 from asyncio import to_thread
 from io import BytesIO
 from random import choice, getrandbits, randint
 from time import perf_counter
+from urllib.parse import quote_plus
 import re
 
-import discord
 from discord.ext import commands
 
 from fractal import fractal
@@ -21,12 +24,13 @@ class RandCommands(commands.Cog):
 
     async def cog_load(self):
         bases = {
-        "b": 2,
-        "o": 8,
-        "d": 10,
-        "h": 16,
-        "64": 64,
-    }
+            "b": 2,
+            "o": 8,
+            "d": 10,
+            "h": 16,
+            "64": 64,
+        }
+
         async def convert_func(ctx, number: str):
             from_base = ctx.command.extras["from_base"]
             to_base = ctx.command.extras["to_base"]
@@ -225,7 +229,7 @@ class RandCommands(commands.Cog):
 
     @commands.command(help="Googles something.", aliases=["lmgtfy", "search"])
     async def google(self, ctx, *, query):
-        await reply(ctx, f"<https://www.google.com/search?q={query.replace(' ', '+')}>")
+        await reply(ctx, f"<https://www.google.com/search?q={quote_plus(query)}>")
 
     def prime_factors(self, n: int) -> list:
         i = 2
@@ -379,6 +383,23 @@ class RandCommands(commands.Cog):
         pattern = r'ore|er(?![a-zA-Z])|or|our|ure|ar|ur|(?<!o)o(?!o)'
         result = re.sub(pattern, lambda m: m.group() if m.group().lower() == 'ore' else 'ORE', text, flags=re.IGNORECASE)
         await reply(ctx, result)
+
+    @commands.command(help="A p p l y  t h e  p i p p o c u r s e  t o  s o m e  t e x t.")
+    async def pippocurse(self, ctx, *, text: str):
+        if random.randint(0, 1) == 0:
+            text = text.replace(" ", " " * random.randint(2, 4))
+        text = text.replace(". ", "." + " " * random.randint(1, 3))
+        if random.randint(0, 1) == 0:
+            text = " ".join(list(text))
+        await reply(ctx, text)
+
+    @commands.command(help="Countdown from 5 seconds in chat")
+    @commands.cooldown(2, 60, commands.BucketType.channel)
+    async def countdown(self, ctx):
+        for i in range(5, 0, -1):
+            await reply(ctx, f"Starting in {i}...")
+            await asyncio.sleep(1)
+        await reply(ctx, "Go!")
 
 async def setup(bot):
     await bot.add_cog(RandCommands(bot))
