@@ -101,7 +101,7 @@ class CustomCommands(commands.Cog):
             await self.bot.database.add_command_response(key, message)
 
         await interaction.response.send_message(
-            f"{len(messages) responses added to command `{key}`.", ephemeral=True
+            f"{len(messages)} responses added to command `{key}`.", ephemeral=True
         )
     
     @add_response.autocomplete("key")
