@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,9 +17,8 @@ class Connector:
     def __init__(self):
         self.database = Path(__file__).parent / "commands.db"
         self.connection = None
-        self.commands_cache = (
-            {}
-        )  # A cache dictionary for custom commands. The keys are the command names, and the value is a list of responses.
+        # A cache dictionary for custom commands. The keys are the command names, and the value is a list of responses.
+        self.commands_cache = defaultdict(list)
 
     async def connect(self):
         """Connect to the SQLite database and create the necessary tables if they do not exist."""
@@ -67,6 +67,9 @@ class Connector:
             )
             await self.connection.commit()
 
+    async def close(self):
+        await self.connection.close()
+
     async def populate_cache(self):
         """If not connected, connect to the database and populate the commands_cache dictionary with the keys and responses from the database.
         The keys are the command names, and the value is a list of responses.
@@ -79,14 +82,8 @@ class Connector:
                 "SELECT key, response FROM command_keys JOIN command_responses ON command_keys.id = command_responses.id"
             )
             rows = await cursor.fetchall()
-            for row in rows:
-                key, response = row
-                if key not in self.commands_cache:
-                    # Command is not in the cache, add it
-                    self.commands_cache[key] = [response]
-                else:
-                    # Command is already in the cache, append the response to the list
-                    self.commands_cache[key].append(response)
+            for key, response in rows:
+                self.commands_cache[key].append(response)
 
     async def get_command(self, key):
         """Get a command from the cache. If the command is not in the cache, return None.

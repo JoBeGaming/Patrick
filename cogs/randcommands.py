@@ -1,15 +1,21 @@
 import asyncio
+import discord
 import random
+import re
+
 from asyncio import to_thread
 from io import BytesIO
 from random import choice, getrandbits, randint
 from time import perf_counter
+from urllib.parse import quote_plus
+import re
 
-import discord
 from discord.ext import commands
 
 from fractal import fractal
-from util import is_staff, baseconvert, reply
+from spirograph import spirograph
+from brainfuck import process_brainfuck
+from util import is_staff, BaseConversionError, baseconvert, reply
 
 
 class RandCommands(commands.Cog):
@@ -18,18 +24,24 @@ class RandCommands(commands.Cog):
 
     async def cog_load(self):
         bases = {
-        "b": 2,
-        "o": 8,
-        "d": 10,
-        "h": 16,
-        "64": 64,
-    }
+            "b": 2,
+            "o": 8,
+            "d": 10,
+            "h": 16,
+            "64": 64,
+        }
+
         async def convert_func(ctx, number: str):
             from_base = ctx.command.extras["from_base"]
             to_base = ctx.command.extras["to_base"]
             try:
                 converted = baseconvert(number, bases[from_base], bases[to_base])
                 await reply(ctx, converted)
+
+            # Re-raise the exception if it was thrown by us,
+            # otherwise keep the generic text.
+            except BaseConversionError as err:
+                raise err from None
             except ValueError as e:
                 await reply(ctx, f"Invalid input number for base {from_base}")
 
@@ -142,6 +154,20 @@ class RandCommands(commands.Cog):
             to_return = "\n".join(to_return)
             await reply(ctx, to_return)
 
+    @commands.command(help="Generate Zalgo text.", aliases=["cursed"])
+    async def zalgo(self, ctx, *, text: str):
+        def zalgo_(text_, severity):
+            marks = list(map(chr, range(768, 879)))
+            words = text_.split()
+            return ' '.join(
+                ''.join(
+                    c + ''.join(choice(marks) for _ in range((i // 2 + 1) * severity)) if c.isalnum() else c
+                    for c in word
+                )
+                for i, word in enumerate(words)
+            )
+        await reply(ctx, zalgo_(text, choice(range(1,20))))
+
     @commands.command(help="Get someone's minecraft UUID.")
     async def uuid(self, ctx, username: str):
         async with self.bot.aiosession.get(
@@ -168,15 +194,31 @@ class RandCommands(commands.Cog):
     @commands.command(help="Slap someone.")
     @commands.guild_only()
     async def slap(self, ctx, user: discord.Member):
+        if user.id == 234649992357347328:
+            return await reply(ctx, "You fool! >:D")
+        elif self.bot.config["roles"]["unslappable"] in map(lambda r: r.id, user.roles):
+            return await reply(ctx, "This user cannot be slapped!")
         slap_role = discord.utils.get(ctx.guild.roles, name="Slapped")
         if slap_role is None:
-            return await reply(ctx, "No slapped rank :(")
+            return await reply(ctx, "No slapped role :(")
         if slap_role in user.roles:
             return await reply(ctx, "User is already slapped.")
         await user.add_roles(slap_role)
-        await reply(ctx, f"slapped {user.mention}")
+        await reply(ctx, f"slapped {user.mention}", False, True)
         await asyncio.sleep(3_600)  # 1 hour
         await user.remove_roles(slap_role)
+
+    @commands.command(help="Unslap someone. Staff only.")
+    @commands.guild_only()
+    @is_staff()
+    async def unslap(self, ctx, user: discord.Member):
+        slap_role = discord.utils.get(ctx.guild.roles, name="Slapped")
+        if slap_role is None:
+            return await reply(ctx, "No slapped role :(")
+        if slap_role not in user.roles:
+            return await reply(ctx, "User is not slapped.")
+        await user.remove_roles(slap_role)
+        await reply(ctx, f"unslapped {user.mention}", is_silent=True)
 
     @commands.command(help="pikl someone.")
     @commands.guild_only()
@@ -184,15 +226,15 @@ class RandCommands(commands.Cog):
     async def pikl(self, ctx, user: discord.Member):
         pikl_role = discord.utils.get(ctx.guild.roles, name="pikl")
         if pikl_role is None:
-            return await reply(ctx, "No pikl rank :(")
+            return await reply(ctx, "No pikl role :(")
         await user.add_roles(pikl_role)
-        await reply(ctx, f"{user.mention} got pikl'd.")
+        await reply(ctx, f"{user.mention} got pikl'd.", False, True)
         await asyncio.sleep(120)
         await user.remove_roles(pikl_role)
 
-    @commands.command(help="Googles something.", aliases=["lmgtfy"])
+    @commands.command(help="Googles something.", aliases=["lmgtfy", "search"])
     async def google(self, ctx, *, query):
-        await reply(ctx, f"<https://www.google.com/search?q={query.replace(' ', '+')}>")
+        await reply(ctx, f"<https://www.google.com/search?q={quote_plus(query)}>")
 
     def prime_factors(self, n: int) -> list:
         i = 2
@@ -259,8 +301,13 @@ class RandCommands(commands.Cog):
         max_iter = self.bot.config["fractalDeets"]["maxIterations"]
         messiness = self.bot.config["fractalDeets"]["messiness"]
         zoom = self.bot.config["fractalDeets"]["zoom"]
-
-        frac = await to_thread(fractal, seed, size, size, max_iter, messiness, zoom)
+        try:
+            frac = await asyncio.wait_for(
+                to_thread(fractal, seed, size, size, max_iter, messiness, zoom),
+                timeout=15.0
+            )
+        except asyncio.TimeoutError:
+            return await reply(ctx, "Fractal generation took too long, terminating.")
 
         with BytesIO() as image_binary:
             frac.save(image_binary, "PNG")
@@ -275,12 +322,89 @@ class RandCommands(commands.Cog):
             f"Fractal generation took {end - start:.2f} seconds for seed '{seed}'"
         )
 
+    @commands.command(help="Generate a spirograph image using a given seed.")
+    async def spirograph(self, ctx, seed: str):
+        start = perf_counter()
+        width = self.bot.config["spirographDeets"]["width"]
+        height = self.bot.config["spirographDeets"]["height"]
+        length = self.bot.config["spirographDeets"]["length"]
+
+        img = await to_thread(spirograph, seed, width, height, length)
+
+        with BytesIO() as image_binary:
+            img.save(image_binary, "PNG")
+            image_binary.seek(0)
+            file = discord.File(fp=image_binary, filename="spirograph.png")
+            embed = discord.Embed()
+            embed.set_image(url="attachment://spirograph.png")
+            await reply(ctx, seed, file=file,  embed=embed)
+
+        end = perf_counter()
+        self.bot.logger.info(
+            f"Spirograph generation took {end - start:.2f} seconds for seed '{seed}'"
+        )
+
     @commands.command(help="Be mean to someone. >:D")
     async def insult(self, ctx, target: str = None):
         if target is None:
             target = ctx.author.display_name
         message = choice(self.bot.config["insults"])
         await reply(ctx, message.format(user=target))
+
+    @commands.command(help="Process brainfuck code.", aliases=["bf"])
+    async def brainfuck(self, ctx, code: str, input: str = ""):
+        if len(code) > 1000:
+            return await reply(ctx, "Code is too long. Maximum length is 1000 characters.")
+        if len(input) > 1000:
+            return await reply(ctx, "Input is too long. Maximum length is 1000 characters.")
+        try:
+            output = await asyncio.wait_for(
+                asyncio.to_thread(process_brainfuck, code, input),
+                timeout=10.0
+            )
+        except asyncio.TimeoutError:
+            return await reply(ctx, "Processing took too long, terminating.")
+
+        if len(output) >= 2000:
+            new_output = output[1900:] + f" ({len(output)-1900} characters remaining...)"
+            if len(new_output) >= 2000:
+                # :(
+                new_output = "Output is too long to send."
+            output = new_output
+
+        await reply(ctx, output)
+
+    @commands.command(help="mOcK soMeTeXt")
+    async def mock(self, ctx, *, text: str):
+        if len(text) < 3:
+            return await reply(ctx, "Text is too short. Minimum length is 3 characters.")
+        mocked = "".join(
+            c.upper() if randint(0, 1) == 0 else c.lower() for c in text
+        )
+        await reply(ctx, mocked)
+
+    @commands.command(help="OREify sOREm Text.")
+    async def oreify(self, ctx, *, text: str):
+        pattern = r'ore|er(?![a-zA-Z])|or|our|ure|ar|ur|(?<!o)o(?!o)'
+        result = re.sub(pattern, lambda m: m.group() if m.group().lower() == 'ore' else 'ORE', text, flags=re.IGNORECASE)
+        await reply(ctx, result)
+
+    @commands.command(help="A p p l y  t h e  p i p p o c u r s e  t o  s o m e  t e x t .")
+    async def pippocurse(self, ctx, *, text: str):
+        if random.randint(0, 1) == 0:
+            text = text.replace(" ", " " * random.randint(2, 4))
+        text = text.replace(". ", "." + " " * random.randint(1, 3))
+        if random.randint(0, 1) == 0:
+            text = " ".join(list(text))
+        await reply(ctx, text)
+
+    @commands.command(help="Countdown from 5 seconds in chat")
+    @commands.cooldown(2, 60, commands.BucketType.channel)
+    async def countdown(self, ctx):
+        for i in range(5, 0, -1):
+            await reply(ctx, f"Starting in {i}...")
+            await asyncio.sleep(1)
+        await reply(ctx, "Go!")
 
 async def setup(bot):
     await bot.add_cog(RandCommands(bot))

@@ -9,11 +9,12 @@ from aiohttp import ClientSession
 from discord.ext import commands
 from dotenv import load_dotenv
 
+
 import database
 from logger import StreamLogFormatter, setup_logger
 from util import (find_automod_matches, is_admin, load_automod_regexes,
                   process_custom_command, reformat_relay_chat, split_list,
-                  reply, create_automod_embed)
+                  reply, create_automod_embed, RelayMember)
 
 load_dotenv(Path(__file__).parent / ".env")
 TOKEN: str = getenv("TOKEN")
@@ -139,8 +140,8 @@ class PatrickHelp(commands.HelpCommand):
             mapping (Mapping[Optional[commands.Cog], List[commands.Command]]): A dictionary provided by discord.py containing the Cogs and their commands. Cog might be None for commands not in a cog.
         """
         user = self.context.author
-        if hasattr(user, "relay") and user.relay:
-            return await user.send("I am not yet able to send DMs to minecraft.")
+        if isinstance(user, RelayMember):
+            return await self.get_destination().send("I am not yet able to send DMs to minecraft.")
         await self.send_help_message(user)
 
     async def send_command_help(self, command: commands.Command) -> None:
@@ -150,10 +151,8 @@ class PatrickHelp(commands.HelpCommand):
             command (commands.Command): The command the user requested help for.
         """
         user = self.context.author
-        if hasattr(user, "relay") and user.relay:
-            return await self.context.send(
-                "I am not yet able to send DMs to minecraft."
-            )
+        if isinstance(user, RelayMember):
+            return await self.get_destination().send("I am not yet able to send DMs to minecraft.")
         if len(command.signature) == 0:
             await user.send(
                 f"Usage: `{self.context.bot.command_prefix[1]}{command.name}`"
@@ -216,7 +215,7 @@ class Patrick(commands.Bot):
         """
         if message.author == self.user:
             return
-        if message.content.startswith("/link"):
+        if message.guild is not None and message.content.startswith("/link"):
             # If the message starts with /link, it's probably someone trying to link their account but not selecting the command from the popup.
             await message.channel.send(
                 f"{message.author.display_name}: Please use the `/link` command from the command popup as you type. Do not type it out manually."
@@ -224,7 +223,10 @@ class Patrick(commands.Bot):
             await message.delete()
             return
         if message.author.bot:
-            matches = find_automod_matches(self, message)
+            if ":" not in message.content:
+                return
+            part = message.content[message.content.index(":") + 1:]
+            matches = find_automod_matches(self, part)
             if matches:
                 logger.info(
                     f"Automod triggered for user {message.author.display_name} with message {message.content}"
@@ -237,6 +239,7 @@ class Patrick(commands.Bot):
                     matches,
                 )
                 await channel.send(
+                    f"Flagged a message {message.jump_url}",
                     embed=embed,
                 )
             # relay chat message need to be reformatted to be processed as a command

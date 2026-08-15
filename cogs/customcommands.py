@@ -89,9 +89,9 @@ class CustomCommands(commands.Cog):
         commands_ = self.bot.database.commands_cache
         return [
             app_commands.Choice(name=key, value=key)
-            for key in commands_
-            if current.lower() in key.lower()
+            for key in [k for k in commands_ if current.lower() in k.lower()][:25]
         ]
+
 
     @app_commands.command(description="Remove a custom command from the bot.")
     @app_is_staff()
@@ -119,8 +119,7 @@ class CustomCommands(commands.Cog):
         commands_ = self.bot.database.commands_cache
         return [
             app_commands.Choice(name=key, value=key)
-            for key in commands_
-            if current.lower() in key.lower()
+            for key in [k for k in commands_ if current.lower() in k.lower()][:25]
         ]
 
     @app_commands.command(
@@ -159,8 +158,7 @@ class CustomCommands(commands.Cog):
         commands_ = self.bot.database.commands_cache
         return [
             app_commands.Choice(name=key, value=key)
-            for key in commands_
-            if current.lower() in key.lower()
+            for key in [k for k in commands_ if current.lower() in k.lower()][:25]
         ]
 
     @remove_response.autocomplete("message")

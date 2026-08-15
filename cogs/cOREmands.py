@@ -3,21 +3,11 @@ import discord
 from discord.ext import commands
 
 from util import app_is_staff, is_staff, create_deletion_embed, reply
-from timeutil import UserFriendlyTime
-
-from typing import Optional
 
 
 class COREmands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
-    @commands.Cog.listener()
-    async def on_thread_create(self, thread: discord.Thread):
-        if thread.parent_id in self.bot.config["autosub_forums"]:
-            role = await thread.guild.fetch_role(self.bot.config["roles"]["staff"])
-            for member in role.members:
-                await thread.add_user(member)
 
     @commands.command(
         help="Shows instructions how to apply for student, builder, or engineer."
@@ -49,12 +39,6 @@ class COREmands(commands.Cog):
         else:
             await member.add_roles(role)
             await reply(ctx, f"{member.display_name} is now Trusted.")
-
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member) -> None:
-        greeting = choice(self.bot.config["greetings"])
-        channel = member.guild.get_channel(self.bot.config["channels"]["welcome"])
-        await channel.send(greeting.format(user=member.mention))
 
 async def setup(bot):
     await bot.add_cog(COREmands(bot))
