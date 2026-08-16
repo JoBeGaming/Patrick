@@ -374,7 +374,7 @@ class RandCommands(commands.Cog):
 
         await reply(ctx, output)
 
-    @commands.command(help="mOcK soMeTeXt")
+    @commands.command(help="mOcK soMe TeXt.")
     async def mock(self, ctx, *, text: str):
         if len(text) < 3:
             return await reply(ctx, "Text is too short. Minimum length is 3 characters.")
@@ -383,7 +383,7 @@ class RandCommands(commands.Cog):
         )
         await reply(ctx, mocked)
 
-    @commands.command(help="OREify sOREm Text.")
+    @commands.command(help="OREify sOREm text.")
     async def oreify(self, ctx, *, text: str):
         pattern = r'ore|er(?![a-zA-Z])|or|our|ure|ar|ur|(?<!o)o(?!o)'
         result = re.sub(pattern, lambda m: m.group() if m.group().lower() == 'ore' else 'ORE', text, flags=re.IGNORECASE)
@@ -398,10 +398,10 @@ class RandCommands(commands.Cog):
             text = " ".join(list(text))
         await reply(ctx, text)
 
-    @commands.command(help="Countdown from 5 seconds in chat")
+    @commands.command(help="Countdown from n seconds in chat. Default number of seconds is 5.")
     @commands.cooldown(2, 60, commands.BucketType.channel)
-    async def countdown(self, ctx):
-        for i in range(5, 0, -1):
+    async def countdown(self, ctx, *, seconds: int = 5):
+        for i in range(seconds, 0, -1):
             await reply(ctx, f"Starting in {i}...")
             await asyncio.sleep(1)
         await reply(ctx, "Go!")
