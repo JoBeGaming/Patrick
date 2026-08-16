@@ -398,7 +398,7 @@ class RandCommands(commands.Cog):
             text = " ".join(list(text))
         await reply(ctx, text)
 
-    @commands.command(help="Countdown from n seconds in chat. Default number of seconds is 5.")
+    @commands.command(help="Countdown from some number of seconds in chat. The default number of seconds is 5.")
     @commands.cooldown(2, 60, commands.BucketType.channel)
     async def countdown(self, ctx, *, seconds: int = 5):
         for i in range(seconds, 0, -1):
