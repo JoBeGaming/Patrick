@@ -11,7 +11,6 @@ BRAINFUCK_LOOP_LIMIT: int = 1000
 BRAINFUCK_MEMORY_LIMIT: int = 30000
 
 
-
 class Memory:
     def __init__(self, input: str) -> None:
         self.counter: int = 0
@@ -52,7 +51,7 @@ def create_brace_map(code: str) -> collections.abc.MutableMapping[int, int]:
     return brace_map
 
 
-def process_brainfuck(code: str, input: str) -> str:
+def process_brainfuck(code: str, input: str, exhausted_input_is_null: bool = False) -> str:
     memory = Memory(input)
     try:
         memory.brace_map = create_brace_map(code)
@@ -86,6 +85,8 @@ def process_brainfuck(code: str, input: str) -> str:
                 if memory.input_index < len(memory.input):
                     memory.cells[memory.pointer] = ord(memory.input[memory.input_index])
                     memory.input_index += 1
+                elif exhausted_input_is_null:
+                    memory.cells[memory.pointer] = 0x00
                 else:
                     return f"error: input exhausted at character {memory.counter}"
 

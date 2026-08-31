@@ -29,12 +29,12 @@ roles:
   trusted: 962782039403298887
   staff: 617848463438118922
   admin: 117711708847472645
-fractalDeets:
+fractal_deets:
     size: 2048
-    maxIterations: 10000
+    max_iterations: 10000
     messiness: 30
     zoom: 3.5
-spirographDeets:
+spirograph_deets:
     height: 2000
     width: 2000
     length: 1000

@@ -8,7 +8,6 @@ from io import BytesIO
 from random import choice, getrandbits, randint
 from time import perf_counter
 from urllib.parse import quote_plus
-import re
 
 from discord.ext import commands
 
