@@ -96,12 +96,12 @@ class CustomCommands(commands.Cog):
             )
             return
         stripped = message.removeprefix("```").removesuffix("```")
-        messages = stripped.splitlines()
-        for message in messages:
-            await self.bot.database.add_command_response(key, message)
+        responses = stripped.splitlines()
+        for response in responses:
+            await self.bot.database.add_command_response(key, response)
 
         await interaction.response.send_message(
-            f"{len(messages)} responses added to command `{key}`.", ephemeral=True
+            f"{len(responses)} responses added to command `{key}`.", ephemeral=True
         )
     
     @add_response.autocomplete("key")
