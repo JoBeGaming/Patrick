@@ -261,19 +261,16 @@ class Patrick(commands.Bot):
             message
         )  # get_context is a discord.py function that create a Context object from a message.
         if ctx.command is None and ctx.prefix is not None:
-            # If the context found none, but there is a valid prefix, it means the user is trying to run a custom command.
-            custom_command_ran = await process_custom_command(self, message)
-            if custom_command_ran:
-                # When a custom command is ran, we can stop processing.
-                return
-            else:
-                # A prefix was found, but no (custom) command was found. This means the user is trying to run a command that does not exist.
-                self.logger.info(
-                    f"User '{ctx.author.display_name}' attempted to run an unrecognized command: '{ctx.message.content[1:]}'"
-                )
-                return await reply(ctx, "Unrecognized command :'(")
+            # If the context found none, but there is a valid prefix, it means
+            # the user is trying to run a custom command.
+            err = await process_custom_command(self, message)
+            if err:
+                # A prefix was found, but no (custom) command was found. This
+                # means that either the user is trying to run a command that does
+                # not exist, or the user gave unnecessary arguments.
+                await reply(ctx, err)
 
-        if ctx.valid:
+        elif ctx.valid:
             # The context is valid when a command and prefix was found.
             # This is provided by discord.py and ensures that the context is valid for regular command processing
             self.logger.info(

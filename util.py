@@ -9,6 +9,10 @@ from discord import app_commands
 from discord.ext import commands
 
 
+if typing.TYPE_CHECKING:
+    import patrick
+
+
 class NoRelayException(Exception):
     ...
 
@@ -69,32 +73,54 @@ def reformat_relay_chat(bot, message) -> typing.Optional[discord.Message]:
     return None
 
 
-async def process_custom_command(bot, message) -> bool:
+async def process_custom_command(bot: patrick.Patrick, message: discord.Message) -> str:
     """Take a message and check if it is a custom command. If it is, send a random response from the list of responses.
-    If the command is not found, return False.
+    If the command is not found, return an error message. The same happens if the command is found in parts, e.g.
+    `,ore is cool`, where `,ore` would is an existing custom command. In that case, we'll report that the command
+    expected no arguments.
 
     Args:
-        bot (commands.Bot): The bot instance.
+        bot (Patrick): The bot instance.
         message (discord.Message): The message to check for a custom command.
 
     Returns:
-        bool: True if the command was found and processed, False otherwise.
+        str: String with the error message to report. If there is no error to report, the string will be empty.
     """
 
     commands = bot.database.commands_cache
-    for prefix in bot.command_prefix:
-        if message.content.removeprefix(prefix) in commands:
+    prefixes = await bot.get_prefix(message)
+    if isinstance(prefixes, str):
+        prefixes = (prefixes,)
+
+    for prefix in prefixes:
+        command = message.content.removeprefix(prefix).lstrip()
+
+        if command in commands:
             bot.logger.info(
-                f"User '{message.author.display_name}' ran custom command '{message.content[1:]}'"
+                f"User '{message.author.display_name}' ran custom command '{command.lstrip()}'"
             )
             await message.channel.send(
-                f"{message.author.display_name}: {choice(commands[message.content.removeprefix(prefix)])}"
+                f"{message.author.display_name}: {choice(commands[command])}"
             )
             await bot.database.add_command_history(
-                message.author.display_name, message.content.removeprefix(prefix)
+                message.author.display_name, command
             )
-            return True
-    return False
+
+            # No need to report an error.
+            return ""
+
+        # Retry using the first word only. If it is found, we know the user
+        # probably attempted to run a custom command, which had arguments given.
+        elif command.split()[0] in commands:
+            bot.logger.info(
+                f"User '{message.author.display_name}' attempted to run command '{command}' with unexpected arguments given"
+            )
+            return f"Command '{command}' didn't expect any arguments :/"
+
+    bot.logger.info(
+        f"User '{message.author.display_name}' attempted to run an unrecognized command: '{message}'"
+    )
+    return "Unrecognized command :'("
 
 
 def load_automod_regexes(bot):
