@@ -83,7 +83,7 @@ def reformat_relay_chat(bot, message) -> typing.Optional[discord.Message]:
         author_name, content = match.groups()
         message.author = copy(message.author)
         message.author.__class__ = RelayMember
-        message.author.nick = author_name
+        message.author.nick = author_name.replace("\\", "")
         message.content = content
         return message
     return None
