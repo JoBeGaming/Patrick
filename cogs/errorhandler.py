@@ -34,7 +34,7 @@ class ErrorHandler(commands.Cog):
             )
         elif isinstance(error, commands.CommandNotFound):
             self.bot.logger.info(
-                f"User '{user_log_repr(ctx.author)}' attempted to run an unrecognized command: '{ctx.message.content[1:]}'"
+                f"User {user_log_repr(ctx.author)} attempted to run an unrecognized command: '{ctx.message.content[1:]}'"
             )
             await respond("Unrecognized command :'(")
         elif isinstance(error, commands.CommandOnCooldown):
