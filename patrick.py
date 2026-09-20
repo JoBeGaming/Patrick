@@ -270,7 +270,7 @@ class Patrick(commands.Bot):
             else:
                 # A prefix was found, but no (custom) command was found. This means the user is trying to run a command that does not exist.
                 self.logger.info(
-                    f"User {user_log_repr(ctx.author)} attempted to run an unrecognized command: '{ctx.message.content[1:]}'"
+                    f"User '{user_log_repr(ctx.author)}' attempted to run an unrecognized command: '{ctx.message.content[1:]}'"
                 )
                 return await reply(ctx, "Unrecognized command :'(")
 
@@ -278,7 +278,7 @@ class Patrick(commands.Bot):
             # The context is valid when a command and prefix was found.
             # This is provided by discord.py and ensures that the context is valid for regular command processing
             self.logger.info(
-                f"User {user_log_repr(message.author)}' ran command '{ctx.command.name}'"
+                f"User '{user_log_repr(message.author)}' ran command '{ctx.command.name}'"
             )
             await self.database.add_command_history(
                 message.author.display_name, ctx.command.name
