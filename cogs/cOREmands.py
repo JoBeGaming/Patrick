@@ -1,9 +1,12 @@
-from random import choice
+import typing
+
 import discord
 from discord.ext import commands
 
-from util import app_is_staff, is_staff, create_deletion_embed, reply
+from util import escape_nickname, is_staff, reply
 
+if typing.TYPE_CHECKING:
+    from patrick import Patrick
 
 class COREmands(commands.Cog):
     def __init__(self, bot):
@@ -12,7 +15,7 @@ class COREmands(commands.Cog):
     @commands.command(
         help="Shows instructions how to apply for student, builder, or engineer."
     )
-    async def apply(self, ctx, *, name: str = None):
+    async def apply(self, ctx: commands.Context[Patrick], *, name: str | None = None):
         if name is None:
             return await reply(ctx, 'Specify "student", "builder", or "engineer".')
         match name:
@@ -35,10 +38,10 @@ class COREmands(commands.Cog):
         role = ctx.guild.get_role(self.bot.config["roles"]["trusted"])
         if role in member.roles:
             await member.remove_roles(role)
-            await reply(ctx, f"{member.display_name} is no longer Trusted.")
+            await reply(ctx, f"{escape_nickname(member.display_name)} is no longer Trusted.")
         else:
             await member.add_roles(role)
-            await reply(ctx, f"{member.display_name} is now Trusted.")
+            await reply(ctx, f"{escape_nickname(member.display_name)} is now Trusted.")
 
 async def setup(bot):
     await bot.add_cog(COREmands(bot))
