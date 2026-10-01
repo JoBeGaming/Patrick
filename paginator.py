@@ -1,14 +1,16 @@
-import typing
-
-import discord
-from discord import Message, Embed, ButtonStyle, Interaction
-from discord.ui import View, Button, Select
-from discord.ext import commands
-
-"""This paginator utility module is taken from modmail-dev/modmail.
+"""
+This paginator utility module is taken from modmail-dev/modmail.
 You can find the source here: https://github.com/modmail-dev/Modmail/blob/master/core/paginator.py
 Please respect the license from the original source.
 """
+
+import typing
+
+import discord
+from discord import ButtonStyle, Embed, Interaction, Message
+from discord.ext import commands
+from discord.ui import Button, Select, View
+
 
 class PaginatorSession:
     """
@@ -153,17 +155,20 @@ class PaginatorSession:
         """Returns the index of the last page"""
         return len(self.pages) - 1
 
-    async def run(self) -> typing.Optional[Message]:
+    async def run(self) -> None:
         """
         Starts the pagination session.
         """
-        if not self.running:
-            await self.show_page(self.current)
 
-            if self.view is not None:
-                await self.view.wait()
+        if self.running:
+            return
 
-            await self.close(delete=False)
+        await self.show_page(self.current)
+
+        if self.view is not None:
+            await self.view.wait()
+
+        await self.close(delete=False)
 
     async def close(
         self, delete: bool = True, *, interaction: Interaction = None
