@@ -9,7 +9,7 @@ from discord import app_commands
 from discord.ext import commands
 
 
-DISCORD_NICKNAME_ESCAPE_RE = re.compile(r'([\\*#_`>~|\[\]()-])')
+_DISCORD_NICKNAME_ESCAPE_RE = re.compile(r'([\\*#_`>~|\[\]()-])')
 
 
 class NoRelayException(Exception):
@@ -43,7 +43,7 @@ def escape_nickname(name: str) -> str:
     Escape all characters in a discord nickname so they don't convert to markdown.
     """
 
-    return DISCORD_NICKNAME_ESCAPE_RE.sub(r"\\\1", name)
+    return _DISCORD_NICKNAME_ESCAPE_RE.sub(r"\\\1", name)
 
 
 def return_or_truncate(text, max_length):
