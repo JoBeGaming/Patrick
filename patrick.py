@@ -9,7 +9,6 @@ import discord
 import yaml
 from aiohttp import ClientSession
 from discord.ext import commands
-
 from dotenv import load_dotenv
 
 import database
@@ -19,6 +18,7 @@ from util import (
     create_automod_embed,
     escape_nickname,
     find_automod_matches,
+    get_message_command_names,
     is_admin,
     load_automod_regexes,
     process_custom_command,
@@ -26,7 +26,6 @@ from util import (
     reply,
     split_list,
     user_log_repr,
-    get_message_command_names
 )
 
 load_dotenv(Path(__file__).parent / ".env")
@@ -38,14 +37,11 @@ def load_config():
         return yaml.safe_load(source)
 
 
-class PatrickHelp(commands.HelpCommand):
+class PatrickHelp(commands.HelpCommand["Patrick"]):
     """A custom implementation of the HelpCommand class to provide a custom help command.
     This class is used to format the help message and send it to the user.
     It is a base feature of the discord.py library.
     """
-
-    def __init__(self):
-        super().__init__()
 
     async def get_commands_mapping(self) -> tuple:
         """Retrieves a tuple of dictionaries containing the commands and custom commands.
@@ -182,10 +178,18 @@ class linkore:
     def get_discord_member_id(cls, name: str) -> int | None: ...
 
 # TODO: Move to util:
-def member_nick(name: str) -> str:
-    # Luckly Minecraft Nicknames cannot contain [ or ] for now.
-    # If they could, this function would have to be a bit more
-    # complicated.
+def member_ign(name: str) -> str:
+    """
+    Extract the IGN from the nickname of a member. E.g.:
+
+        >>> member_ign("Job [JoBe_Gaming]")
+        JoBe_Gaming
+        >>> member_ign("StackDoubleFlow")
+        StackDoubleFlow
+    """
+
+    # Luckly Minecraft Names cannot contain [ or ] for now. If they could, this
+    # function would have to be a bit more complicated.
     return name.rsplit("[", 1)[-1].removesuffix("]")
 
 
@@ -227,7 +231,6 @@ class Patrick(commands.Bot):
         self.guild: discord.Guild = self.get_guild(self.server_id) # type: ignore
         self.logged_errors: set[str] = set()
 
-
     async def on_ready(self):
         """This function is called by discord.py when the bot is fully logged in and ready to use.
         It connects to the database and loads the extensions.
@@ -238,19 +241,18 @@ class Patrick(commands.Bot):
         await self.load_extensions()
         self.logger.info(f"Logged in as {self.user}")
 
-
     def is_network_message(self, message: discord.Message) -> bool:
         """
         Check wether a given message is a network message or not.
         """
 
-        if not message.author.bot or message.channel.id != self.config["channels"]["gamechat"]:
+        if (not message.author.bot
+            or message.channel.id != self.config["channels"]["gamechat"]):
             return False
 
         roles: list[discord.Role] = getattr(message.author, "roles", [])
         role_ids = [role.id for role in roles]
         return self.config["roles"]["network_bot"] in role_ids
-
 
     # TODO: Cached but cached result of a member is deleted if:
     #  - Member in cache leaves
@@ -260,16 +262,17 @@ class Patrick(commands.Bot):
     async def get_linked_member(self, name: str, roles: collections.abc.Iterable[int]) -> discord.Member | discord.User | None:
         member = None
         try:
-            id = linkore.get_discord_member_id(name)
-            if not id is None:
-                member = self.get_user(id)
+            member_id = linkore.get_discord_member_id(name)
+            if not member_id is None:
+                member = self.get_user(member_id)
+
         except linkore.CannotAccessLinkoreDB as err:
             if not str(err) in self.logged_errors:
                 self.logged_errors.add(str(err))
                 self.logger.error(str(err))
 
             for member in self.guild.members:
-                if member_nick(member.display_name) == name:
+                if member_ign(member.display_name) == name:
                     break
 
             else:
@@ -279,7 +282,6 @@ class Patrick(commands.Bot):
             return None
 
         return member
-
 
     async def on_message(self, message: discord.Message, /) -> None:
         """This function is an event listener that is called when a message is sent in a channel the bot can see.
@@ -334,7 +336,6 @@ class Patrick(commands.Bot):
 
         await self.process_commands(message)
 
-
     def get_app_command(self, message: discord.Message) -> str:
         """
         Check wether the bot has a :class:`discord.app_commands.Command` who's
@@ -370,7 +371,6 @@ class Patrick(commands.Bot):
 
         return ""
 
-
     async def process_commands(self, message: discord.Message, /) -> None:
         """An override of the process_commands function to add custom command processing.
         This is called after on_message has prepared the message for command processing.
@@ -378,6 +378,7 @@ class Patrick(commands.Bot):
         Args:
             message (discord.Message): The message that was sent.
         """
+
         ctx = await self.get_context(
             message
         )  # get_context is a discord.py function that create a Context object from a message.
@@ -388,7 +389,7 @@ class Patrick(commands.Bot):
             if not custom_command_ran:
                 # A prefix was found, but no (custom) command was found. This means the user is trying to run a command that does not exist.
                 self.logger.info(
-                    f"User '{user_log_repr(ctx.author)}' attempted to run an unrecognized command: '{ctx.message.content[1:]}'"
+                    f"User {user_log_repr(ctx.author)} attempted to run an unrecognized command: '{ctx.message.content[1:]}'"
                 )
 
                 app_cmd = self.get_app_command(message)
@@ -412,7 +413,7 @@ class Patrick(commands.Bot):
             # The context is valid when a command and prefix was found.
             # This is provided by discord.py and ensures that the context is valid for regular command processing
             self.logger.info(
-                f"User '{user_log_repr(message.author)}' ran command '{ctx.command.name}'"
+                f"User {user_log_repr(message.author)} ran command '{ctx.command.name}'"
             )
             await self.database.add_command_history(
                 message.author.display_name, ctx.command.name
@@ -420,7 +421,6 @@ class Patrick(commands.Bot):
             await self.invoke(
                 ctx
             )  # pass off to discord.py to handle the command processing.
-
 
     async def load_extensions(self):
         """A function to load all extension in the ./cogs directory.
