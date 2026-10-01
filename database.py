@@ -235,7 +235,7 @@ class Connector:
             await cur.execute(query, (user_id, channel_id, message, timestamp))
             await self.connection.commit()
 
-    async def get_reminders(self, user_id):
+    async def get_reminders(self, user_id) -> list[tuple[str, int, datetime]]:
         """Get all reminders for a user. The reminders are returned as a list of tuples with the message and timestamp of each reminder.
 
         Args:
@@ -258,7 +258,7 @@ class Connector:
             rows = await cur.fetchall()
             await self.connection.commit()
             return rows
-        
+
     async def add_tempban(self, user_id, reason, timestamp):
         """Add a temporary ban for a user. The ban is stored in the database with the user's ID, reason, and expiration time.
 
