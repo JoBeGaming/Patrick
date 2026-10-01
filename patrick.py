@@ -1,5 +1,7 @@
+import collections.abc
 import logging
 import re
+import typing
 from os import getenv, listdir
 from pathlib import Path
 
@@ -7,14 +9,25 @@ import discord
 import yaml
 from aiohttp import ClientSession
 from discord.ext import commands
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 
 import database
 from logger import StreamLogFormatter, setup_logger
-from util import (find_automod_matches, is_admin, load_automod_regexes,
-                  process_custom_command, reformat_relay_chat, split_list,
-                  reply, create_automod_embed, RelayMember)
+from util import (
+    RelayMember,
+    create_automod_embed,
+    escape_nickname,
+    find_automod_matches,
+    is_admin,
+    load_automod_regexes,
+    process_custom_command,
+    reformat_relay_chat,
+    reply,
+    split_list,
+    user_log_repr,
+    get_message_command_names
+)
 
 load_dotenv(Path(__file__).parent / ".env")
 TOKEN: str = getenv("TOKEN")
@@ -162,6 +175,19 @@ class PatrickHelp(commands.HelpCommand):
                 f"Usage: `{self.context.bot.command_prefix[1]}{command.name} {command.signature}`"
             )
 
+class linkore:
+    class CannotAccessLinkoreDB(Exception): ...
+
+    @classmethod
+    def get_discord_member_id(cls, name: str) -> int | None: ...
+
+# TODO: Move to util:
+def member_nick(name: str) -> str:
+    # Luckly Minecraft Nicknames cannot contain [ or ] for now.
+    # If they could, this function would have to be a bit more
+    # complicated.
+    return name.rsplit("[", 1)[-1].removesuffix("]")
+
 
 class Patrick(commands.Bot):
     """The main class for the bot. It inherits from commands.Bot and is used to handle the bot's events and commands."""
@@ -170,10 +196,10 @@ class Patrick(commands.Bot):
         self.logger = logger_
         self.config = config_
         self.database = database.Connector()
-        self.relay_regex = re.compile(
+        self.relay_regex: re.Pattern[str] = re.compile(
             self.config.get(
                 "ingame_regex",
-                r"^`[A-Za-z]+` \*\*([A-Za-z0-9_\\]+)\*\*: *(.*)$",  # Load a default regex if not found in config as a fallback.
+                r"^`([A-Za-z]+)` \*\*([A-Za-z0-9_\\]+)\*\*: *(.*)$",  # Load a default regex if not found in config as a fallback.
             )
         )
         activity = discord.Game("with Python")  # No more kotlin :)
@@ -193,6 +219,15 @@ class Patrick(commands.Bot):
             help_command=PatrickHelp(),  # Registering the custom help command.
         )
 
+        # TODO: CREATE THIS FROM CONFIG
+        self.member_roles: dict[str, int] = {}
+
+        # ID of the current server (guild).
+        self.server_id: int = self.config["server_id"] # type: ignore
+        self.guild: discord.Guild = self.get_guild(self.server_id) # type: ignore
+        self.logged_errors: set[str] = set()
+
+
     async def on_ready(self):
         """This function is called by discord.py when the bot is fully logged in and ready to use.
         It connects to the database and loads the extensions.
@@ -203,7 +238,50 @@ class Patrick(commands.Bot):
         await self.load_extensions()
         self.logger.info(f"Logged in as {self.user}")
 
-    async def on_message(self, message: discord.Message) -> None:
+
+    def is_network_message(self, message: discord.Message) -> bool:
+        """
+        Check wether a given message is a network message or not.
+        """
+
+        if not message.author.bot or message.channel.id != self.config["channels"]["gamechat"]:
+            return False
+
+        roles: list[discord.Role] = getattr(message.author, "roles", [])
+        role_ids = [role.id for role in roles]
+        return self.config["roles"]["network_bot"] in role_ids
+
+
+    # TODO: Cached but cached result of a member is deleted if:
+    #  - Member in cache leaves
+    #  - Member uses ",link refresh"
+    #  - Minecraft linked account uses ",link refresh"
+    #@util.cached_linked_members
+    async def get_linked_member(self, name: str, roles: collections.abc.Iterable[int]) -> discord.Member | discord.User | None:
+        member = None
+        try:
+            id = linkore.get_discord_member_id(name)
+            if not id is None:
+                member = self.get_user(id)
+        except linkore.CannotAccessLinkoreDB as err:
+            if not str(err) in self.logged_errors:
+                self.logged_errors.add(str(err))
+                self.logger.error(str(err))
+
+            for member in self.guild.members:
+                if member_nick(member.display_name) == name:
+                    break
+
+            else:
+                return None
+
+        if member is None:
+            return None
+
+        return member
+
+
+    async def on_message(self, message: discord.Message, /) -> None:
         """This function is an event listener that is called when a message is sent in a channel the bot can see.
         First it will check if the message is from the bot itself, if it is, it will ignore it.
         Then it will check if the message is from a bot, if it is, it will check if it matches the automod regexes.
@@ -213,23 +291,34 @@ class Patrick(commands.Bot):
         Args:
             message (discord.Message): The message that was sent.
         """
+
+        # Cancel any further actions if the message author was ourselves, to
+        # prevent e.g. infinite recursion.
         if message.author == self.user:
             return
+
         if message.guild is not None and message.content.startswith("/link"):
             # If the message starts with /link, it's probably someone trying to link their account but not selecting the command from the popup.
             await message.channel.send(
-                f"{message.author.display_name}: Please use the `/link` command from the command popup as you type. Do not type it out manually."
+                f"{escape_nickname(message.author.display_name)}: Please use the `/link` command from the command popup as you type. Do not type it out manually."
             )
-            await message.delete()
-            return
-        if message.author.bot:
-            if ":" not in message.content:
-                return
-            part = message.content[message.content.index(":") + 1:]
-            matches = find_automod_matches(self, part)
+            return await message.delete()
+
+        if self.is_network_message(message):
+            match = self.relay_regex.match(message.content)
+            if not match:
+                return logger.warning(
+                    f"Network message from bot {user_log_repr(message.author)} didn't match relay regex."
+                )
+
+            role_name, user_name, content = match.groups()
+            message = reformat_relay_chat(self, message, role_name, user_name,
+                                          content)
+
+            matches = find_automod_matches(self, content)
             if matches:
                 logger.info(
-                    f"Automod triggered for user {message.author.display_name} with message {message.content}"
+                    f"Automod triggered for user {user_log_repr(message.author)} with message {message.content}"
                 )
                 channel = message.guild.get_channel(
                     self.config["channels"]["automod"]
@@ -242,15 +331,47 @@ class Patrick(commands.Bot):
                     f"Flagged a message {message.jump_url}",
                     embed=embed,
                 )
-            # relay chat message need to be reformatted to be processed as a command
-            if message.channel.id == self.config["channels"]["gamechat"]:
-                message = reformat_relay_chat(self, message)
-                if message is None:
-                    return
 
         await self.process_commands(message)
 
-    async def process_commands(self, message: discord.Message) -> None:
+
+    def get_app_command(self, message: discord.Message) -> str:
+        """
+        Check wether the bot has a :class:`discord.app_commands.Command` who's
+        name is a prefix for the message and return the message with the matched
+        prefix removed, e.g.:
+
+            >>> bot.command_prefix
+            [',', ', ']
+            >>> message.content
+            ', addresponse'
+            >>> bot.get_app_command(message)
+            'addresponse'
+            >>> message2.content
+            ',hithere'
+            >>> bot.get_app_command(message)
+            ''
+
+        Args:
+            message (discord.Message): The message that might contain a valid
+                                       app command.
+
+        Returns:
+            str: The matched app command name. If no name got matched, the string
+                 is empty.
+        """
+
+        command_names = list(get_message_command_names(self, message.content))
+
+        for command in self.commands:
+            if (isinstance(command, discord.app_commands.Command)
+                and command.name in command_names):
+                return command.name
+
+        return ""
+
+
+    async def process_commands(self, message: discord.Message, /) -> None:
         """An override of the process_commands function to add custom command processing.
         This is called after on_message has prepared the message for command processing.
 
@@ -263,21 +384,35 @@ class Patrick(commands.Bot):
         if ctx.command is None and ctx.prefix is not None:
             # If the context found none, but there is a valid prefix, it means the user is trying to run a custom command.
             custom_command_ran = await process_custom_command(self, message)
-            if custom_command_ran:
-                # When a custom command is ran, we can stop processing.
-                return
-            else:
+
+            if not custom_command_ran:
                 # A prefix was found, but no (custom) command was found. This means the user is trying to run a command that does not exist.
                 self.logger.info(
-                    f"User '{ctx.author.display_name}' attempted to run an unrecognized command: '{ctx.message.content[1:]}'"
+                    f"User '{user_log_repr(ctx.author)}' attempted to run an unrecognized command: '{ctx.message.content[1:]}'"
                 )
-                return await reply(ctx, "Unrecognized command :'(")
+
+                app_cmd = self.get_app_command(message)
+                if app_cmd:
+                    # Slash-command for the message exists. Either the command
+                    # was used in a raw form, e.g.
+                    #     ,add
+                    # or it had trailing arguments as well, like
+                    #     ,add hello
+                    # In either case, this errors and gives the app-command the
+                    # user should have used.
+                    error = f". Perhaps try the command as an app command (`/{app_cmd}`)?"
+                else:
+                    error = "Unrecognized command"
+
+                await reply(ctx, error + " :'(")
+
+            return
 
         if ctx.valid:
             # The context is valid when a command and prefix was found.
             # This is provided by discord.py and ensures that the context is valid for regular command processing
             self.logger.info(
-                f"User '{message.author.display_name}' ran command '{ctx.command.name}'"
+                f"User '{user_log_repr(message.author)}' ran command '{ctx.command.name}'"
             )
             await self.database.add_command_history(
                 message.author.display_name, ctx.command.name
@@ -285,6 +420,7 @@ class Patrick(commands.Bot):
             await self.invoke(
                 ctx
             )  # pass off to discord.py to handle the command processing.
+
 
     async def load_extensions(self):
         """A function to load all extension in the ./cogs directory.
@@ -294,10 +430,12 @@ class Patrick(commands.Bot):
         The status and possible errors will be logged at the end of the loading process.
         """
         self.logger.info("Loading extensions")
-        status = {}
+        status: dict[str, typing.Literal["X", "L"]] = {}
+
         for extension in listdir("./cogs"):
             if extension.endswith(".py"):
                 status[extension] = "X"  # Default to X for not loaded.
+
         if len(status) == 0:
             logger.info("No extensions found")
             return
