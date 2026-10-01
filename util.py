@@ -1,12 +1,19 @@
+import collections.abc
 import re
 import typing
-from random import choice
+import urllib.parse
 from copy import copy
 from io import StringIO
+from random import choice
 
 import discord
 from discord import app_commands
 from discord.ext import commands
+
+_DISCORD_NICKNAME_ESCAPE_RE = re.compile(r'([\\*#_`>~|\[\]()-])')
+
+if typing.TYPE_CHECKING:
+    import patrick
 
 
 class NoRelayException(Exception):
@@ -20,13 +27,96 @@ class BaseConversionError(ValueError):
 
 
 class RelayMember(discord.Member):
-    __slots__ = tuple()
-    """A subclass of discord.Member to signify that the member is a relay member.
-    The class holds no functionality, but is used to signify that the member is a relay member for permission checks.
+    """
+    Subclass of discord.Member to signify that the member is a relay member.
     """
 
+    @classmethod
+    def _roles_from_name(cls, bot: patrick.Patrick, role_name: str) -> list[int]:
+        # In Discord, the roles are called `Administrator` and `Moderator`,
+        # while Chattore shows them as `Admin` and `Mod`. First we convert
+        # the Chattore name to the Discord one.
+        if role_name == "Admin":
+            role_name = "Administrator"
+        elif role_name == "Mod":
+            role_name = "Moderator"
 
-def return_or_truncate(text, max_length):
+        # Boolean to indicate wether the user is Staff.
+        staff = role_name in {"Administrator", "Moderator"}
+
+        # Currently there is no other information we can grab from the Minecraft
+        # format.
+        roles: list[int] = [bot.member_roles[role_name]]
+
+        if staff:
+            roles.append(bot.member_roles["staff"])
+
+        return roles
+
+    @classmethod
+    def from_member(cls, bot: patrick.Patrick, member: discord.User | discord.Member, nick: str, role_name: str) -> RelayMember:
+        if isinstance(member, discord.User):
+            raise TypeError("Expected instance of discord.Member in RelayMember.from_member, got discord.User instead.")
+
+        self = copy(member)
+        self.__class__ = RelayMember
+
+        # Previous instance was a bot. Reset this for later usage.
+        self.bot = False
+
+        self._roles = discord.utils.SnowflakeList(cls._roles_from_name(bot, role_name))
+        self.nick = nick
+
+        # Once a Minecraft UUID - Discord ID Database is done, we can add more
+        # here, or just grab the user instance with the ID.
+        # TODO:
+        #   For now we don't set the ID to anything new, which means stuff like reminders would ping the given Network Bot from now-on.
+        #   Hopefully though a related PR (TO BE DONE) will be merged before that tough.
+
+        return self # type: ignore[reportReturnType]
+
+
+def mention(user_id: int) -> str:
+    """
+    Create a mention from a user-id. This is useful for cases where no
+    :class:`discord.Member` can be created due to us only having a user-id,
+    e.g. from a database query.
+    """
+
+    return f"<@{user_id}>"
+
+
+def user_log_repr(user: discord.User | discord.Member) -> str:
+    """
+    Create a formatted string using the un-escaped nickname as well as the user
+    id, so log messages are the same as in chattore.
+    """
+
+    return f"{user.display_name} ({user.id})"
+
+
+def escape_nickname(name: str) -> str:
+    """
+    Escape all characters in a discord nickname so they don't convert to markdown.
+    """
+
+    return _DISCORD_NICKNAME_ESCAPE_RE.sub(r"\\\1", name)
+
+
+def url_wrap(url: str, **params: str) -> str:
+    """
+    Create a wrapped URL, parsable e.g. by :func:`urllib.parse.unwrap`. Due to
+    using keyword-argument syntax to pass the parameters, duplicate entries are
+    not supported.
+    """
+
+    if not params:
+        return f"<{url}>"
+
+    return f"<{url}?{urllib.parse.urlencode(params, quote_via=urllib.parse.quote)}>"
+
+
+def return_or_truncate(text: str, max_length: int) -> str:
     """Takes a string and truncates it to a maximum length, adding ellipsis if truncated.
     If the string is shorter than the maximum length, it returns the original string.
 
@@ -38,39 +128,82 @@ def return_or_truncate(text, max_length):
         str: The original string if it's shorter than max_length, otherwise the truncated string with ellipsis.
     """
 
-    if len(text) <= max_length:
+    # TODO: CAP LEN AT 2k
+    # max_length should never be smaller than / equal to 3 characters, but it's
+    # better to be safe than sorry (and get weird text output).
+    if len(text) <= max_length or max_length <= 3:
         return text
-    return text[: max_length - 3] + "..."
+
+    return text[:max_length - 3] + "..."
 
 
-def reformat_relay_chat(bot, message) -> typing.Optional[discord.Message]:
-    """Takes a discord message and checks if it's a server relay message.
-    If it is, it reformats the message to be processed as a command by the bot.
+def reformat_relay_chat(bot: patrick.Patrick, message: discord.Message, role_name: str, author_name: str, content: str) -> discord.Message:
+    """
+    Takes a Discord message and reformats it to be processed as a command by the bot.
     It also changes the author of the message to a RelayMember object.
     This is done to prevent the bot from trying to process commands as itself.
-    The message is then returned or None if it is not a relay message to signify that it's a regular chat message.
+    Afterwards, the content is set to the content of the message sent in-game, and
+    the message is returned.
 
     Args:
         bot (commands.Bot): The bot instance.
         message (discord.Message): The message to be reformatted.
+        role_name (str): Name of the role of the user sending the message via the relay.
+        author_name (str): Name of the user sending the message via the relay.
+        content (str): Actual message content sent by the user.
 
     Returns:
-        discord.Message: The reformatted message if it is a relay message, otherwise None.
+        discord.Message: The reformatted message.
     """
 
-    match = bot.relay_regex.match(message.content)
-    if match:
-        author_name, content = match.groups()
-        message.author = copy(message.author)
-        message.author.__class__ = RelayMember
-        message.author.nick = author_name
-        message.content = content
-        return message
-    return None
+    message.author = RelayMember.from_member(bot, message.author,
+                                             author_name.replace("\\", ""),
+                                             role_name)
+    message.content = content
+    return message
 
 
-async def process_custom_command(bot, message) -> bool:
-    """Take a message and check if it is a custom command. If it is, send a random response from the list of responses.
+def get_raw_prefixes(bot: patrick.Patrick) -> list[str]:
+    """
+    Return all string prefixes the bot is listening to, sorted by decreasing
+    lenght.
+
+    String prefixes means that the message is not taken into consideration,
+    which makes the :attr:`patrick.Patrick.command_prefix` unable to be a
+    function.
+    """
+
+    if callable(bot.command_prefix):
+        return []
+
+    if isinstance(bot.command_prefix, str):
+        return [bot.command_prefix]
+
+    return sorted(bot.command_prefix, key=len, reverse=True)
+
+
+def get_message_command_names(bot: patrick.Patrick, message: str) -> collections.abc.Generator[str]:
+    """
+    Take a message and extract all possible command names from it, e.g.:
+
+        >>> bot.command_prefix = [",", ", ", ",command "]
+        >>> msg = ",command hi"
+        >>> for possible_name in get_message_command_names(bot, msg):
+        ...     print(possible_name)
+        ...
+        hi
+        command hi
+        >>>
+    """
+
+    for prefix in get_raw_prefixes(bot):
+        if message.startswith(prefix):
+            yield message.removeprefix(prefix)
+
+
+async def process_custom_command(bot, message: discord.Message) -> bool:
+    """
+    Take a message and check if it is a custom command. If it is, send a random response from the list of responses.
     If the command is not found, return False.
 
     Args:
@@ -85,12 +218,14 @@ async def process_custom_command(bot, message) -> bool:
     for prefix in bot.command_prefix:
         if message.content.removeprefix(prefix) in commands:
             bot.logger.info(
-                f"User '{message.author.display_name}' ran custom command '{message.content[1:]}'"
+                f"User {user_log_repr(message.author)} ran custom command '{message.content[1:]}'"
             )
             await message.channel.send(
-                f"{message.author.display_name}: {choice(commands[message.content.removeprefix(prefix)])}"
+                f"{escape_nickname(message.author.display_name)}: {choice(commands[message.content.removeprefix(prefix)])}"
             )
             await bot.database.add_command_history(
+                # No need to escape name here, this is not sent immediately. Also, it might
+                # cause problems with the current state of the DB.
                 message.author.display_name, message.content.removeprefix(prefix)
             )
             return True
@@ -158,11 +293,9 @@ def app_is_staff():
             is not None
         ):
             return True
-        else:
-            await interaction.response.send_message(
-                "You are not staff.", ephemeral=True
-            )
-            return False
+
+        await interaction.response.send_message("You are not staff.", ephemeral=True)
+        return False
 
     return app_commands.check(predicate)
 
@@ -182,8 +315,8 @@ def is_admin():
             is not None
         ):
             return True
-        else:
-            raise commands.MissingPermissions("You are not an admin.")
+
+        raise commands.MissingPermissions("You are not an admin.")
 
     return commands.check(predicate)
 
@@ -202,11 +335,10 @@ def app_is_admin():
             is not None
         ):
             return True
-        else:
-            await interaction.response.send_message(
-                "You are not an admin.", ephemeral=True
-            )
-            return False
+
+        await interaction.response.send_message("You are not an admin.",
+                                                ephemeral=True)
+        return False
 
     return app_commands.check(predicate)
 
@@ -216,11 +348,11 @@ def is_discord_member():
     This allows you to stop certain commands from being run by relay members.
     """
 
-    def predicate(ctx):
-        if not isinstance(ctx.author, RelayMember):
-            return True
-        else:
+    def predicate(ctx: commands.Context[patrick.Patrick]):
+        if isinstance(ctx.author, RelayMember):
             raise commands.MissingPermissions("You are not a discord member.")
+
+        return True
 
     return commands.check(predicate)
 
@@ -259,18 +391,18 @@ def baseconvert(number: str, base_from: int, base_to: int) -> str:
         raise BaseConversionError("Base must be at least 2.")
 
     if not all(char in characters for char in number):
-        raise BaseConversionError(f"All characters of the given input must be in the range 0-9, A-Z and a-z or + and /. Underscores can be used to seperate parts of the number.")
+        raise BaseConversionError("All characters of the given input must be in the range 0-9, A-Z and a-z or + and /. Underscores can be used to seperate parts of the number.")
 
     # Check for invalid cases with _ within the number.
     was_underscore: bool = False
     for idx, char in enumerate(number):
         if char == "_":
             if idx == 0:
-                raise BaseConversionError(f"Number cannot start with underscore.")
+                raise BaseConversionError("Number cannot start with underscore.")
             if idx == len(number) - 1:
-                raise BaseConversionError(f"Number cannot end with underscore.")
+                raise BaseConversionError("Number cannot end with underscore.")
             if was_underscore:
-                raise BaseConversionError(f"Cannot use multiple consecutive underscores in a number.")
+                raise BaseConversionError("Cannot use multiple consecutive underscores in a number.")
             was_underscore = True
         else:
             was_underscore = False
@@ -305,9 +437,9 @@ def baseconvert(number: str, base_from: int, base_to: int) -> str:
 
 
 async def create_deletion_embed(
-        staff: typing.Union[discord.Member, discord.User],
-        reason: str,
-        message: discord.Message,
+    staff: typing.Union[discord.Member, discord.User],
+    reason: str,
+    message: discord.Message,
 ) -> typing.Tuple[discord.Embed, typing.List[discord.File]]:
     """Creates an embed for a deletion action.
 
@@ -327,7 +459,7 @@ async def create_deletion_embed(
     embed.set_thumbnail(url="https://i.imgflip.com/44o9ir.png")
     embed.add_field(name="Staff Member", value=staff.mention, inline=False)
     embed.add_field(name="User", value=message.author.mention, inline=True)
-    embed.add_field(name="Display Name", value=message.author.display_name, inline=True)
+    embed.add_field(name="Display Name", value=escape_nickname(message.author.display_name), inline=True)
     embed.add_field(name="Reason", value=reason, inline=False)
     if len(message.message_snapshots) > 0:
         embed.add_field(
@@ -363,8 +495,8 @@ async def create_deletion_embed(
 
 
 async def create_automod_embed(
-        message: str,
-        matches: list[str]
+    message: str,
+    matches: list[str]
 ) -> discord.Embed:
     """Creates an embed for a deletion action.
 
@@ -404,8 +536,8 @@ def get_all_command_names(bot: commands.Bot) -> typing.List[str]:
     return command_names
 
 
-async def reply(ctx, message=None, is_reply=False, is_silent=False, **kwargs):
+async def reply(ctx: commands.Context[patrick.Patrick], message=None, is_reply=False, is_silent=False, **kwargs):
     if message is None:
         message = ""
     target = ctx.reply if is_reply else ctx.send
-    return await target(f"{ctx.author.display_name}: {message}", silent=is_silent, **kwargs)
+    return await target(f"{escape_nickname(ctx.author.display_name)}: {message}", silent=is_silent, **kwargs)
