@@ -1,21 +1,24 @@
+# pylint: disable=C0114, C0116, R0913
+
 import asyncio
-import discord
 import random
 import re
-
+import typing
 from asyncio import to_thread
 from io import BytesIO
 from random import choice, getrandbits, randint
 from time import perf_counter
-from urllib.parse import quote_plus
-import re
 
+import discord
 from discord.ext import commands
 
+from brainfuck import process_brainfuck
 from fractal import fractal
 from spirograph import spirograph
-from brainfuck import process_brainfuck
-from util import is_staff, BaseConversionError, baseconvert, reply
+from util import BaseConversionError, baseconvert, escape_nickname, is_staff, reply, url_wrap
+
+if typing.TYPE_CHECKING:
+    import patrick
 
 
 class RandCommands(commands.Cog):
@@ -42,7 +45,7 @@ class RandCommands(commands.Cog):
             # otherwise keep the generic text.
             except BaseConversionError as err:
                 raise err from None
-            except ValueError as e:
+            except ValueError:
                 await reply(ctx, f"Invalid input number for base {from_base}")
 
         for from_base, from_value in bases.items():
@@ -63,11 +66,12 @@ class RandCommands(commands.Cog):
         message = await reply(ctx, "Testing...")
         latency = (perf_counter() - start) * 1000
         await message.edit(
-            content=f"{ctx.author.display_name}: Pong!\nLatency: {latency:.2f}ms\n"
+            content=f"{escape_nickname(ctx.author.display_name)}: Pong!\n"
+                    f"Latency: {latency:.2f}ms\n"
                     f"API Latency: {self.bot.latency * 1000:.2f}ms"
         )
 
-    @commands.command(help="Gets a random quote from zenquotes.", aliases=["zenquote"])
+    @commands.command(help="Gets a random quote from zenquotes.", aliases=["zenquote", "zquote"])
     async def quote(self, ctx):
         async with self.bot.aiosession.get(
             "https://zenquotes.io/api/random/"
@@ -83,8 +87,7 @@ class RandCommands(commands.Cog):
             if response.status == 200:
                 data = await response.json()
                 return data
-            else:
-                return None
+            return None
 
     def xkcd_embed(self, data):
         embed = discord.Embed(
@@ -150,7 +153,7 @@ class RandCommands(commands.Cog):
                     to_return.append(f"**d{sides}** rolled **{count}** time(s): `{values_}` (**{sum(values)}**)")
                 except ValueError:
                     return await reply(ctx, "Invalid dice format! I'm expecting XdT where X is "
-                                   f"the number of rolls and T is the number of sides.")
+                                            "the number of rolls and T is the number of sides.")
             to_return = "\n".join(to_return)
             await reply(ctx, to_return)
 
@@ -196,8 +199,9 @@ class RandCommands(commands.Cog):
     async def slap(self, ctx, user: discord.Member):
         if user.id == 234649992357347328:
             return await reply(ctx, "You fool! >:D")
-        elif self.bot.config["roles"]["unslappable"] in map(lambda r: r.id, user.roles):
+        if self.bot.config["roles"]["unslappable"] in map(lambda r: r.id, user.roles):
             return await reply(ctx, "This user cannot be slapped!")
+
         slap_role = discord.utils.get(ctx.guild.roles, name="Slapped")
         if slap_role is None:
             return await reply(ctx, "No slapped role :(")
@@ -223,30 +227,76 @@ class RandCommands(commands.Cog):
     @commands.command(help="pikl someone.")
     @commands.guild_only()
     @is_staff()
-    async def pikl(self, ctx, user: discord.Member):
-        pikl_role = discord.utils.get(ctx.guild.roles, name="pikl")
+    async def pikl(self, ctx: commands.Context[patrick.Patrick], user: discord.Member, duration: int = 5):
+        pikl_role = discord.utils.get(getattr(ctx.guild, "roles", []), name="pikl")
         if pikl_role is None:
             return await reply(ctx, "No pikl role :(")
+
         await user.add_roles(pikl_role)
         await reply(ctx, f"{user.mention} got pikl'd.", False, True)
-        await asyncio.sleep(120)
+        await asyncio.sleep(duration * 60)
         await user.remove_roles(pikl_role)
 
-    @commands.command(help="Googles something.", aliases=["lmgtfy", "search"])
-    async def google(self, ctx, *, query):
-        await reply(ctx, f"<https://www.google.com/search?q={quote_plus(query)}>")
+    @commands.command(help="Use duck-duck-go to search for something.", aliases=["lmddgtfy", "ddg"])
+    async def duckduckgo(self, ctx: commands.Context[patrick.Patrick], *, query: str) -> None:
+        """
+        Send the query-link for duck-duck-go with the given query.
+        """
 
-    def prime_factors(self, n: int) -> list:
+        await reply(ctx, url_wrap("https://www.duckduckgo.com", q=query))
+
+
+    @commands.command(help="Googles something.", aliases=["lmgtfy"])
+    async def google(self, ctx: commands.Context[patrick.Patrick], *, query: str) -> None:
+        """
+        Send the query-link for google with the given query.
+        """
+
+        await reply(ctx, url_wrap("https://www.google.com", q=query))
+
+
+    async def translate(self, ctx: commands.Context[patrick.Patrick], *, text: str = "",
+                        tl: str = "en", sl: str = "auto", op: str = "translate") -> None:
+        """
+        Return a link to google-translate with the given parameters. Also checks
+        the size of the text before replying.
+        """
+
+        # Some sources say 3900 is the limit, but for me it stopped at 5000.
+        # Usually messages this long are not allowed by Minecraft and even
+        # Nitro users have a limit of 4000. If that limit should be updated one
+        # day or something similar happens with Minecraft, we have this check.
+        if len(text) > 5000:
+            await reply(ctx, "Error: Text is too long. Also this is likely flood.")
+            return await ctx.message.delete()
+
+        # Patrick responses are limited, and we don't want to flood chat ourself.
+        # The normal discord message limit is 2000, but when we assume the message
+        # is made of `a ` repeated, and we escape that, we'll end up with 4x the
+        # size. Therefore we check if the entire reply content is bigger than the
+        # limit.
+        content = url_wrap("https://translate.google.com", text=text, tl=tl, sl=sl, op=op)
+
+        if len(content) > 2000:
+            await reply(ctx, "Error: The text is too long when combined with "
+                             "the options you gave. Perhaps translate this manually?")
+
+        await reply(ctx, content)
+
+
+    def prime_factors(self, n: int) -> list[int]:
+        factors: list[int] = []
         i = 2
-        factors = []
-        while i * i <= n:
+        while i ** 2 <= n:
             if n % i:
                 i += 1
             else:
                 n //= i
                 factors.append(i)
+
         if n > 1:
             factors.append(n)
+
         return factors
 
     @commands.command(help="Get the prime factors of a number.")
@@ -347,7 +397,7 @@ class RandCommands(commands.Cog):
     @commands.command(help="Be mean to someone. >:D")
     async def insult(self, ctx, target: str = None):
         if target is None:
-            target = ctx.author.display_name
+            target = escape_nickname(ctx.author.display_name)
         message = choice(self.bot.config["insults"])
         await reply(ctx, message.format(user=target))
 
