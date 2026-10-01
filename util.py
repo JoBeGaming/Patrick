@@ -35,7 +35,7 @@ def user_log_repr(user: discord.User | discord.Member) -> str:
     id, so log messages are the same as in chattore.
     """
 
-    return f"{user.display_name} ({user.id})"
+    return f"'{user.display_name}' ({user.id})"
 
 
 def escape_nickname(name: str) -> str:
